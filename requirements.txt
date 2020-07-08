@@ -1,0 +1,4 @@
+numpy
+imutils
+dlib
+cv2
