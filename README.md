@@ -1,7 +1,7 @@
 # Overview
 I already have a repo for `car counting` and tracking but here I decided to detect `car stop`.
 
-So this repo is based on CarCounterYOLOv3 with some changes in it's structure and code.
+So this repo is based on [CarCounterYOLOv3](https://github.com/CREESTL/CarCounterYOLOv3) with some changes in it's structure and code.
 ____
 
  At the very beginning a thought that it was enough just to check if centroid coords on N and N+1 frames are the same. That would indicate that a car is standing still.
@@ -23,6 +23,7 @@ ____
 
 How to `run it`:
 - Clone/Download this project.
+- Download YOLOv3 `.weights` [here](https://yadi.sk/d/-WQu7wm-T3dhzg)
 - Get all necessary modules via `pip install -r 'requirements.txt'.
 - Go to the directory with this project.
 - Type `python car_stop_detector.py -y yolo --input videos/PATH_TO_YOUR_VIDEO.mp4 --output output --skip-frames 5` and hit `Enter`.
