@@ -23,7 +23,7 @@ ____
 
 How to `run it`:
 - Clone/Download this project.
-- Download YOLOv3 `.weights` [here](https://yadi.sk/d/-WQu7wm-T3dhzg)
+- Download YOLOv3 `.weights` [here](https://yadi.sk/d/-WQu7wm-T3dhzg) and put it to `/yolo` folder
 - Get all necessary modules via `pip install -r 'requirements.txt'.
 - Go to the directory with this project.
 - Type `python car_stop_detector.py -y yolo --input videos/PATH_TO_YOUR_VIDEO.mp4 --output output --skip-frames 5` and hit `Enter`.
