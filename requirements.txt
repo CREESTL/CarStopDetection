@@ -1,4 +1,6 @@
+cmake
+scipy
 numpy
 imutils
 dlib
-cv2
+opencv-python

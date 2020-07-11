@@ -1,6 +1,6 @@
 
 # RUN THE CODE:
-# python car_stop_detector.py -y yolo --input videos/PATH_TO_YOUR_VIDEO.mp4 --output output --skip-frames 5
+# python car_stop_detector.py -y yolo --input videos/10fps.mp4 --output output --skip-frames 5
 
 # importing all modules (pip install -r "requirements.txt")
 from pyimagesearch.centroidtracker import CentroidTracker
@@ -10,6 +10,7 @@ import argparse
 import imutils
 import dlib
 import cv2
+import time
 import math as maths
 
 # command line argument parser
@@ -46,16 +47,16 @@ def draw_centroids(frame, objects, trackableObjects, long_stopped_cars):
         # drawing circle and text
         if objectID in long_stopped_cars:
             text = "ID {} STOPPED".format(objectID + 1)
-            # если авто не двигается, то рисуется красным центроид большой
+            # if a car is not moving then we draw a large yellow centroid
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-            cv2.circle(frame, (centroid[0], centroid[1]), 6, (0, 0, 255), -1)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            cv2.circle(frame, (centroid[0], centroid[1]), 6, (0, 255, 255), -1)
         else:
             text = "ID {}".format(objectID + 1)
-            # если авто не двигается, то рисуется красным центроид большой
+            # else we draw a smaller green centroid
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
-            cv2.circle(frame, (centroid[0], centroid[1]), 2, (0, 255, 0), -1)
+            cv2.circle(frame, (centroid[0], centroid[1]), 3, (0, 255, 0), -1)
 
 
 # Function calculates distance between two centroids
@@ -65,9 +66,8 @@ def find_distance(c1, c2):
     return int(maths.sqrt((c2[0]-c1[0])**2 + (c2[1]-c1[1])**2))
 
 # Function compares coords on the certain car's box on N and N+1 frames
-# It returns a list of cars that are PERHAPS not moving
-def compare_trackers(old_trackers, new_trackers, frame_width):
-    stopped_car_IDs = []
+# It returns a list of cars that are, PERHAPS, not moving
+def compare_trackers(old_trackers, new_trackers, frame_width, stopped_car_IDs):
     for (old_objectID, old_centroid) in old_trackers.items():
         for (new_objectID, new_centroid) in new_trackers.items():
             if old_objectID == new_objectID:
@@ -75,20 +75,37 @@ def compare_trackers(old_trackers, new_trackers, frame_width):
                 print(f"Distance between centroids of car number {old_objectID+1} is {distance}")
                 # If the distance between centroids is less than 1/N of width of the frame then we add it to the list
                 if distance < frame_width / parts:
-                    stopped_car_IDs.append(new_objectID)
+                    print("it is OK")
+                    if new_objectID not in stopped_car_IDs:
+                        print(f"{new_objectID + 1} is a new car - add it to stopped_car_ID")
+                        stopped_car_IDs.append(new_objectID)
                 else:
                     print("it is more than we need")
                     if new_objectID in stopped_car_IDs:
+                        print(f"deleting {new_objectID + 1}")
                         # If the distance is more than 1/N then it means that the car started moving again - delete it from the list
                         stopped_car_IDs.remove(new_objectID)
+            # if a car has moved away from the frame and we can not see it anymore then we should
+            # delete it from the list of stopped cars
+            if old_objectID not in new_trackers.keys():
+                if old_objectID in stopped_car_IDs:
+                    print(f"car {old_objectID+1} is not on the frame anymore - deleting it...")
+                    stopped_car_IDs.remove(old_objectID)
+    # if new_trackers are an empty array, that means that there are NO cars of a frame at all
+    # so we should clear stopped_car_IDs
+    if len(new_trackers.keys()) == 0:
+        if stopped_car_IDs != []:
+            print("there is no car on a frame - clear stopped_car_IDs")
+            stopped_car_IDs.clear()
+
     return stopped_car_IDs
 
 
 # Function finds cars that were not moving long enough
-def find_stopped_cars(counting_frames):
+def find_stopped_cars(counting_frames, frames_to_stop):
     long_stopped_cars = []
     for ID, frames in counting_frames.items():
-        if frames > 30: # this number can be changed to increase work efficiency
+        if frames > frames_to_stop: # this number can be changed to increase work efficiency
             long_stopped_cars.append(ID)
     return long_stopped_cars
 
@@ -135,41 +152,57 @@ trackers = []
 car_trackableObjects = {}
 truck_trackableObjects = {}
 
-# the number of frames in the video
+# The number of frames in the video
 totalFrames = 0
 
-# number of processed frame
+# The number of processed frame
 frame_number = 0
 
-# those are dicts of "old" trackers that relate to the previous frame
-# they are compared to "new" trackers that relate to the current frame
+# Those are dicts of "old" trackers that relate to the previous frame
+# They are compared to "new" trackers that relate to the current frame
 old_car_trackers = None
 old_truck_trackers = None
 
-# in those dicts key = ID of a car that is, perhaps, stopped and value = amount of frames that this car was not moving
+# This array contains IDs of cars that are, probably, stopped
+stopped_car_IDs = []
+stopped_truck_IDs = []
+
+# Tn those dicts key = ID of a car that is, perhaps, stopped and value = amount of SECONDS that this car was not moving
 car_counting_frames = {}
 truck_counting_frames = {}
 
-# this is in how many parts we separate the width of a frame to use it in detection later
-parts = 50
+# In those dicts key = ID of a car that is, perhaps, stopped and value is an array [date&time when car stopped, current date&time]
+car_counting_seconds = {}
+truck_counting_seconds = {}
+
+# This is in how many parts we separate the width of a frame to use it in detection later
+parts = 80
+
+# This is hot many frames a car should not move so we can say that it has actually stopped
+frames_to_stop = 20
 
 ########################################################################################################################
 
 while True:
-    print(f"\n\nFRAME {frame_number}")
     frame_number += 1
-    frame = vs.read()
-    frame = frame[1]
-
-    # stop if the end of the video is reached
+    success_capture, frame = vs.read()
+    if not success_capture:
+        print("=============================================")
+        print("ERROR! VIDEO NOT FOUND")
+        print("=============================================")
+        break
+        # stop if the end of the video is reached
     if frame is None:
         print("=============================================")
         print("The end of the video reached")
         print("=============================================")
         break
 
+    print("\n=============================================")
+    print(f"FRAME {frame_number}")
+
     # change frame size to increase speed a bit
-    frame = imutils.resize(frame, width=600, height=400)
+    frame = imutils.resize(frame, width=600)
 
     #change colors from RGB to BGR to work in dlib
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -177,7 +210,7 @@ while True:
     if width is None or height is None:
         height, width, channels = frame.shape
 
-    print(f"width / {parts} is {width / parts}")
+    print(f"minimum distance is {width / parts}")
 
     # lists of bounding boxes
     car_rects = []
@@ -286,9 +319,9 @@ while True:
 
     # get the IDs of cars that are, perhaps, stopped
     if (old_car_trackers is not None):
-        stopped_car_IDs = compare_trackers(old_car_trackers, cars, width)
+        stopped_car_IDs = compare_trackers(old_car_trackers, cars, width, stopped_car_IDs)
     if (old_truck_trackers is not None):
-        stopped_truck_IDs = compare_trackers(old_truck_trackers, trucks, width)
+        stopped_truck_IDs = compare_trackers(old_truck_trackers, trucks, width, stopped_truck_IDs)
         if stopped_car_IDs != []:
             for ID in stopped_car_IDs:
                 # Increasing the number of frames
@@ -297,6 +330,12 @@ while True:
                 # Adding a new car ID
                 else:
                     car_counting_frames[ID] = 1
+            # if any ID is IN car_counting_frames.keys() but it os NOT IN the stopped_car_IDs then we have to delete
+            # from the dictionary as it means that the car is stopped and moving at the same time which is impossible
+            for ID in car_counting_frames.copy().keys():
+                if ID not in stopped_car_IDs:
+                    print(f"{ID + 1} is in car_counting_frames but is not in stopped_car_IDs - delete it from car_counting_frames")
+                    car_counting_frames.pop(ID)
         else:
             # If a list is empty it means that there are no cars to process
             car_counting_frames = {}
@@ -307,9 +346,14 @@ while True:
                     truck_counting_frames[ID] += 1
                 else:
                     truck_counting_frames[ID] = 1
+
+            for ID in truck_counting_frames.copy().keys():
+                if ID not in stopped_truck_IDs:
+                    truck_counting_frames.pop(ID)
         else:
             truck_counting_frames = {}
 
+    print("\n")
     # some info on the screen (debug)
     for k,v in car_counting_frames.items():
         print(f"car {k+1} was standing for {v} frames")
@@ -317,8 +361,43 @@ while True:
         print(f"truck {k+1} was standing for {v} frames")
 
     # those are the lists of cars that have been standing still long enough
-    long_stopped_cars = find_stopped_cars(car_counting_frames)
-    long_stopped_trucks = find_stopped_cars(truck_counting_frames)
+    # they refresh EACH frame
+    long_stopped_cars = find_stopped_cars(car_counting_frames, frames_to_stop)
+    long_stopped_trucks = find_stopped_cars(truck_counting_frames, frames_to_stop)
+
+    # now when we have a list of cars that are for sure stopped we can count how long (in seconds) they are not moving
+    for ID in long_stopped_cars:
+        if ID not in car_counting_seconds.keys():
+            # if it is a new car then we pinpoint time when car stops
+            start = time.asctime()
+            # [0,0] will later be replaced
+            car_counting_seconds[ID] = [0,0]
+            car_counting_seconds[ID][0] = start
+        else:
+            # else if this car is already on the list then we add time to it's current time
+            stop = time.asctime()
+            car_counting_seconds[ID][1] = stop
+
+    # do the same thing but for trucks
+    for ID in long_stopped_trucks:
+        if ID not in truck_counting_seconds.keys():
+            # if it is a new car then we pinpoint time when car stops
+            start = time.asctime()
+            truck_counting_seconds[ID] = [0, 0]
+            truck_counting_seconds[ID][0] = start
+        else:
+            # else if this car is already on the list then we add time to it's current time
+            stop = time.asctime()
+            truck_counting_seconds[ID][1] = stop
+
+
+    print("\n----RESULTS----:")
+    # show info about seconds in command line
+    for ID,[start, stop] in car_counting_seconds.items():
+        print(f"car {ID + 1} was standing from: {start} to {stop}")
+    for ID, [start, stop] in truck_counting_seconds.items():
+        print(f"truck {ID + 1} was standing from: {start} to {stop}")
+
 
     old_car_trackers = cars.copy()
     old_truck_trackers = trucks.copy()
@@ -339,8 +418,7 @@ while True:
     # increase frame number
     totalFrames += 1
 
-
 # close everything
 cv2.destroyAllWindows()
 
-# Thanks for your attention!
+# Thanks for using my code, bud ;)
