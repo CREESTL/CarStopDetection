@@ -179,7 +179,9 @@ truck_counting_seconds = {}
 parts = 80
 
 # This is hot many frames a car should not move so we can say that it has actually stopped
-frames_to_stop = 20
+# If a video was shot in 60fps then 30 frames is equal to 0.5 second of standing on one place.
+# You can change this variable if you want
+frames_to_stop = 30
 
 ########################################################################################################################
 
@@ -246,6 +248,10 @@ while True:
                     w = int(detection[2] * width)
                     # height of the box
                     h = int(detection[3] * height)
+
+                    # if a box is too small (for example if a car is moving very close to the edge of a frame, then we do skip it
+                    if h <= (height / 10):
+                        continue
 
                     # coords of left upper and right lower connors of the box
                     x1 = int(center_x - w / 2)
